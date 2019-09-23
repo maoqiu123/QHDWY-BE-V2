@@ -1,0 +1,84 @@
+<?php
+
+namespace App\Http\Controllers\SJD\LJXQ;
+
+use App\Service\SJD\LJXQ\FAQRService;
+use App\Tools\ValidationHelper;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+
+class FAQRController extends Controller
+{
+    private $faqrService;
+
+    public function __construct(FAQRService $FAQRService)
+    {
+        $this->faqrService = $FAQRService;
+    }
+
+    public function makeSure(Request $request){
+        $yz = $request->user;
+        $rule = [
+            'sgzfaid' => 'required',
+            'sqrjg' => 'required',
+            'ngzfadf' => 'required',
+        ];
+        $res = ValidationHelper::validateCheck($request->input(), $rule);
+        if ($res->fails()) {
+            return response()->json([
+                'code' => 1001,
+                'message' => $res->errors()
+            ]);
+        }
+        $data = ValidationHelper::getInputData($request, $rule);
+        if ($this->faqrService->hasQr($yz->id, $data['sgzfaid'])->sstatus == '提交') {
+            return response()->json([
+                'code' => 8002,
+                'message' => '不可重复确认'
+            ]);
+        }
+        if ($data['sqrjg'] == '不同意') {
+            if (empty($request->input('sbtyyy'))) {
+                return response()->json([
+                    'code' => 1001,
+                    'message' => '不同意需注明原因！'
+                ]);
+            }
+            $data['sbtyyy'] = $request->input('sbtyyy');
+        }
+        $data['syzid'] = $yz->id;
+        $data['dqrrq'] = Carbon::now();
+        $data['ssfzd'] = '否';
+        $data['stxr'] = $yz->syzxm;
+        $data['dtxrq'] = Carbon::now();
+        $data['sstatus'] = '提交';
+        $this->faqrService->create($data);
+        return response()->json([
+            'code' => 1000,
+            'message' => '投票成功'
+        ]);
+    }
+
+    public function hasYzMakeSure(Request $request){
+        $sfaqrid = $request->sfaqrid;
+        if (empty($sfaqrid)) {
+            return response()->json([
+                'code' => 1001,
+                'message' => '需要填写方案确认id'
+            ]);
+        }
+        $res = $this->faqrService->hasQr($request->user->id, $sfaqrid);
+        if ($res)
+            return response()->json([
+                'code' => 1000,
+                'message' => '查询成功',
+                'data' => $res
+            ]);
+        else return response()->json([
+            'code' => 1000,
+            'message' => '查询成功',
+            'data' => false
+        ]);
+    }
+}
